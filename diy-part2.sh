@@ -11,7 +11,7 @@
 #
 
 # 删除可能导致干扰的软件包
-rm -rf feeds/luci/applications/luci-app-unblockneteasemusic
+# rm -rf feeds/luci/applications/luci-app-unblockneteasemusic
 
 # Modify default IP
 sed -i 's/192.168.1.1/192.168.1.10/g' package/base-files/files/bin/config_generate
