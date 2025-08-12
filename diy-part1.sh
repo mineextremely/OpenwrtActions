@@ -15,14 +15,19 @@
 
 # Add a feed source
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
-echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
-echo 'src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2' >>feeds.conf.default
+#echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+#echo 'src-git passwall2 https://github.com/xiaorouji/openwrt-passwall2' >>feeds.conf.default
 
 # 常规目录软件包
 git clone https://github.com/sirpdboy/luci-app-advancedplus.git package/luci-app-advancedplus
+git clone https://github.com/ophub/luci-app-amlogic package/luci-app-amlogic
+
+'''
+# 设置 OpenWrt 根目录
+OPENWRT_ROOT=$(pwd)
 
 # =============================
-# 硬编码添加多个源码包到 package
+# 添加源码包到 package (完整克隆版本)
 # =============================
 
 # 函数：添加指定仓库的特定子目录
@@ -33,20 +38,16 @@ add_package() {
     
     echo "正在添加: ${target_dir}..."
     
-    # 创建临时目录
-    local temp_dir=$(mktemp -d)
+    # 创建目标目录
+    local target_path="${OPENWRT_ROOT}/package/${target_dir}"
+    mkdir -p "${target_path}"
     
-    # 稀疏克隆仓库
-    git clone --depth 1 --filter=blob:none --sparse "${repo_url}" "${temp_dir}"
-    (
-        cd "${temp_dir}"
-        git sparse-checkout init --cone
-        git sparse-checkout set "${src_path}"
-        
-        # 移动到目标位置
-        mkdir -p "../../package/${target_dir}"
-        mv "${src_path}"/* "../../package/${target_dir}/"
-    )
+    # 完整克隆仓库
+    local temp_dir=$(mktemp -d)
+    git clone --depth 1 "${repo_url}" "${temp_dir}"
+    
+    # 复制所需内容
+    cp -R "${temp_dir}/${src_path}/." "${target_path}/"
     
     # 清理临时目录
     rm -rf "${temp_dir}"
@@ -62,11 +63,6 @@ add_package "https://github.com/0x2196f3/luci-app-subconverter" \
     "main/luci-app-subconverter" \
     "luci-app-subconverter"
 
-# 添加 luci-theme-kucat
-add_package "https://github.com/sirpdboy/luci-theme-kucat" \
-    "js/luci-theme-kucat" \
-    "luci-theme-kucat"
-
 # =============================
 # 处理 subconverter 文件替换
 # =============================
@@ -74,7 +70,10 @@ add_package "https://github.com/sirpdboy/luci-theme-kucat" \
 echo "处理 subconverter 文件替换..."
 
 # 定义目标目录
-TARGET_DIR="package/luci-app-subconverter/root/etc/subconverter"
+TARGET_DIR="${OPENWRT_ROOT}/package/luci-app-subconverter/root/etc/subconverter"
+
+# 确保目标目录存在
+mkdir -p "${TARGET_DIR}"
 
 # 下载二进制文件
 echo "下载 subconverter 二进制..."
@@ -83,28 +82,33 @@ wget -qO /tmp/subconverter.tar.gz \
 
 # 创建临时工作目录
 TEMP_DIR=$(mktemp -d)
-tar -xzf /tmp/subconverter.tar.gz -C $TEMP_DIR
+tar -xzf /tmp/subconverter.tar.gz -C "${TEMP_DIR}"
 
 # 清理目标目录（保留 subweb 目录）
-if [ -d "$TARGET_DIR" ]; then
+if [ -d "${TARGET_DIR}" ]; then
     echo "清理目标目录..."
-    cd "$TARGET_DIR"
-    # 创建 subweb 临时备份
-    mkdir -p $TEMP_DIR/subweb_backup
-    [ -d "subweb" ] && mv subweb $TEMP_DIR/subweb_backup/
+    cd "${TARGET_DIR}"
     
-    # 删除除 subweb 外的所有内容
-    find . -mindepth 1 -maxdepth 1 ! -name 'subweb' -exec rm -rf {} +
+    # 备份 subweb 目录
+    if [ -d "subweb" ]; then
+        mv "subweb" "${TEMP_DIR}/subweb_backup"
+    fi
+    
+    # 删除所有内容
+    rm -rf "${TARGET_DIR:?}"/*
     
     # 恢复 subweb 目录
-    [ -d "$TEMP_DIR/subweb_backup/subweb" ] && mv $TEMP_DIR/subweb_backup/subweb .
+    if [ -d "${TEMP_DIR}/subweb_backup" ]; then
+        mv "${TEMP_DIR}/subweb_backup" "subweb"
+    fi
 fi
 
 # 复制解压内容到目标目录
 echo "复制新文件到目标目录..."
-cp -rf $TEMP_DIR/subconverter/* "$TARGET_DIR/"
+cp -rf "${TEMP_DIR}/subconverter/." "${TARGET_DIR}/"
 
 # 清理临时文件
-rm -rf /tmp/subconverter.tar.gz $TEMP_DIR
+rm -rf /tmp/subconverter.tar.gz "${TEMP_DIR}"
 
 echo "subconverter 文件替换完成！"
+'''
